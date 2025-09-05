@@ -1,0 +1,94 @@
+// Bibliotecas
+const request = require('supertest');
+const { expect } = require('chai');
+
+const graphqlUrl = 'http://localhost:4000/graphql';
+
+describe('GraphQL Mutation: createTransfer', () => {
+  let token;
+
+  before(async () => {
+    // Login para obter o token JWT
+    const loginMutation = {
+      query: `
+        mutation {
+          loginUser(username: "julio", password: "123456") {
+            token
+          }
+        }
+      `
+    };
+    const res = await request(graphqlUrl)
+      .post('')
+      .send(loginMutation);
+    token = res.body.data.loginUser.token;
+  });
+
+  it('a) Transferência com sucesso', async () => {
+    const mutation = {
+      query: `
+        mutation {
+          createTransfer(from: "julio", to: "priscila", value: 100) {
+            from
+            to
+            value
+          }
+        }
+      `
+    };
+    const res = await request(graphqlUrl)
+      .post('')
+      .set('Authorization', `Bearer ${token}`)
+      .send(mutation);
+
+    expect(res.status).to.equal(200);
+    expect(res.body.data.createTransfer).to.include({
+      from: 'julio',
+      to: 'priscila',
+      value: 100
+    });
+  });
+
+  it('b) Sem saldo disponível para transferência', async () => {
+    const mutation = {
+      query: `
+        mutation {
+          createTransfer(from: "julio", to: "priscila", value: 999999) {
+            from
+            to
+            value
+          }
+        }
+      `
+    };
+    const res = await request(graphqlUrl)
+      .post('')
+      .set('Authorization', `Bearer ${token}`)
+      .send(mutation);
+
+    expect(res.status).to.equal(200);
+    expect(res.body).to.have.nested.property('errors[0].message', 'Saldo insuficiente');
+    expect(res.body.data).to.be.null;
+  });
+
+  it('c) Token de autenticação não informado', async () => {
+    const mutation = {
+      query: `
+        mutation {
+          createTransfer(from: "julio", to: "priscila", value: 100) {
+            from
+            to
+            value
+          }
+        }
+      `
+    };
+    const res = await request(graphqlUrl)
+      .post('')
+      .send(mutation);
+
+    expect(res.status).to.equal(200);
+    expect(res.body).to.have.nested.property('errors[0].message', 'Autenticação obrigatória');
+    expect(res.body.data).to.be.null;
+  });
+});
